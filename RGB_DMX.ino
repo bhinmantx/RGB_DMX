@@ -2,6 +2,7 @@
 #include "Rdm_Defines.h"
 #include "Rdm_Uid.h"
 
+//BASED ON: 
 /*
   DMX_Slave.ino - Example code for using the Conceptinetics DMX library
   Copyright (c) 2013 W.A. van der Meeren <danny@illogic.nl>.  All right reserved.
@@ -69,29 +70,70 @@ DMX_Slave dmx_slave ( DMX_SLAVE_CHANNELS );
 ///// DMX_Slave dmx_slave ( DMX_SLAVE_CHANNELS , RXEN_PIN );
 
 const int ledPin = 13;
+#define IR_COMMAND_DIMMER  25
+#define IR_COMMAND_BRIGHTER 27
+#define IR_COMMAND_ON 26
+#define IR_COMMAND_OFF 23
+//older bulb
+/*
+unsigned char commandVals[24] =  {
+  0x8,
+  0x10,
+  0x18,
+  0x20,
+  0x28,
+  0x30,
+  0x48,
+  0x50,
+  0x58,
+  //0x60,
+  //0x68,
+  0x70,
+  0x88,
+  0x90,
+  0x98,
+  0xA0,
+  0xA8,
+  0xC8,
+  0xD0,
+  0xD8,
+  0xE8,
+  0xF0
+};
+*/
 
-unsigned char commandVals[24] = {0x8,
-0x10,
-0x18,
-0x20,
-0x28,
-0x30,
-0x48,
-0x50,
-0x58,
-//0x60,
-//0x68,
-0x70,
-0x88,
-0x90,
-0x98,
-0xA0,
-0xA8,
-0xC8,
-0xD0,
-0xD8,
-0xE8,
-0xF0};
+unsigned char commandVals[29] =  {
+  0x1,  //swapping pattern?   0
+  0x2,  //orange (yellow?)1
+  0x1F, //purple  2
+  0x20, //purple maybe  3
+  0x28, //teal  4
+  0x30, //quick fade pattern  5
+  0x32, //teal-ish again  6
+  0x38, //yello 7
+  0x48, //pale blue?  8
+  0x50, //sickly yellow 9
+  0x58, //pausing mix 10
+  0x68, //Blue/purple 11
+  0x70, //light purple  12
+  0x78, //light blue13
+  0x88, //dark blue (true blue) 14
+  0x90, //(full blue?)15
+  0x98, //some red  16
+  0xA8, //white 17
+  0xB0, //Another fade  18
+  0xB2, //fast multi color strobe 19
+  0xD8, //green 20
+  0xE8, //orange  21
+  0xF0, //Purple  22
+  0xF8, //OFF?  23
+  0xB8, //DOWN  24
+  0xB8, //DOWN  25
+  0xB0, //ON  26
+  0x90, //UP MABYE?27
+  0x90 //UP MABYE?28
+};
+
 // the setup routine runs once when you press reset:
 void setup() {             
   
@@ -120,39 +162,45 @@ void setup() {
 // the loop routine runs over and over again forever:
 void loop() 
 {
-  //
-  // EXAMPLE DESCRIPTION
-  //
-  // If the first channel comes above 50% the led will switch on
-  // and below 50% the led will be turned off
- /* 
-  // NOTE:
-  // getChannelValue is relative to the configured startaddress
-  if ( dmx_slave.getChannelValue (1) > 127 )
-    digitalWrite ( ledPin, HIGH );
-  else
-    digitalWrite ( ledPin, LOW );
-    */
-    int prevCommand = 0;
-int currCommand = 0;
-while (true) {
-currCommand = dmx_slave.getChannelValue (1);
+  int prevCommand = -1; // tracking history
+  int currCommand = 0;
 
-if (currCommand != prevCommand) {
-  prevCommand = currCommand;
-digitalWrite ( ledPin, HIGH );
-    if ( currCommand < 20 ){
+  int currBrightnessCommand = 0; //hilariously this might be thought of more like howDimmed
+  int prevBrightnessCommand = -1; 
+  int currBrightnessInt = 0; //Since it's not a 1 to 1, we have to remap, and know if it's changed
+  bool hasBrightnessReset = false;
+  
+  while (true) {
+    currCommand = dmx_slave.getChannelValue (1);
+    currBrightnessCommand = dmx_slave.getChannelValue (2);
+    
+    if (currCommand != prevCommand) {
+      hasBrightnessReset =  true;
+      prevCommand = currCommand;
+      digitalWrite ( ledPin, HIGH ); //indicate we're sending
+    if ( currCommand < 28 ){
         dmx_ir(currCommand);  
     }else{
       digitalWrite ( ledPin, LOW );
     }
-}
-else {
-  digitalWrite ( ledPin, LOW );
-}
-}
-  delay(1000);
+    if (hasBrightnessReset) {
+      //We need to get back to the correct brightness level. 
+      //If it's reset, previous brightness is 0 (full)
+      //we want to get the currently ordered brightness
+      int targetBrightnessInt = remapBrightToInt(currBrightnessCommand);
+
+      for(int i = 0; i <= targetBrightnessInt; i++){
+        dmx_ir(IR_COMMAND_DIMMER); 
+      }
+    hasBrightnessReset = false;
+    }
   }
+  else {
+    digitalWrite ( ledPin, LOW );
+  }
+}
+
+}
 
 
 
